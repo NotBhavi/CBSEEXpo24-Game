@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Car Exhibition</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #coordinates {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(255, 255, 255, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            font-family: Arial, sans-serif;
+        }
+    </style>
+</head>
+<body>
+    <div id="coordinates">Coordinates: (x: 0, y: 0, z: 0)</div>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer, car, font;
+        let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false, turnLeft = false, turnRight = false;
+        let infoTextMesh, daresTextMesh;
+        let daresVisible = false, infoVisible = false;
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // Sky blue background
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            // Load font
+            const loader = new THREE.FontLoader();
+            loader.load('https://threejs.org/examples/fonts/helvetiker_regular.typeface.json', function(loadedFont) {
+                font = loadedFont;
+                createText('Move right for information and left for fun & dares', 0, 4, -10, 0xffffff);
+                infoTextMesh = createText('Social Media & Its Side Effects:\n1. Social media can lead to addiction.\n2. It can cause anxiety and depression.\n3. Be aware of fake news and misinformation.\n4. Social media can Make you dumb', 10, 2.5, 5, 0x0000ff);
+                daresTextMesh = createText('Fun Dares:\n1. need to read 1 page of a Book given.\n2. if your phone has screen time more than 1 hour and 45 minutes you need to do pushups accordingly.\n3. spend 15 minutes without using you phone.', -10, 2.5, 5, 0xff0000);
+
+                // Initially hide both texts
+                infoTextMesh.visible = false;
+                daresTextMesh.visible = false;
+            });
+
+            // Create a detailed car
+            car = new THREE.Group();
+
+            // Car body
+            const bodyGeometry = new THREE.BoxGeometry(4, 1.2, 5);
+            const bodyMaterial = new THREE.MeshPhongMaterial({ color: 0xcc0000, specular: 0x111111, shininess: 100 });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.position.y = 1.1;
+            body.castShadow = true;
+            car.add(body);
+
+            // Car roof
+            const roofGeometry = new THREE.BoxGeometry(3, 1, 3);
+            const roofMaterial = new THREE.MeshPhongMaterial({ color: 0xcc0000, specular: 0x111111, shininess: 100 });
+            const roof = new THREE.Mesh(roofGeometry, roofMaterial);
+            roof.position.y = 2.2;
+            roof.position.z = -0.5;
+            roof.castShadow = true;
+            car.add(roof);
+
+            // Windshield
+            const windshieldGeometry = new THREE.PlaneGeometry(2.5, 1.3);
+            const windshieldMaterial = new THREE.MeshPhongMaterial({ color: 0xccccff, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+            const windshield = new THREE.Mesh(windshieldGeometry, windshieldMaterial);
+            windshield.rotation.x = Math.PI / 6;
+            windshield.position.set(0, 2, 0.9);
+            car.add(windshield);
+
+            // Headlights
+            const headlightGeometry = new THREE.CircleGeometry(0.3, 32);
+            const headlightMaterial = new THREE.MeshPhongMaterial({ color: 0xffffcc, emissive: 0xffffcc });
+            const leftHeadlight = new THREE.Mesh(headlightGeometry, headlightMaterial);
+            leftHeadlight.position.set(-1.5, 1.2, 2.5);
+            car.add(leftHeadlight);
+            const rightHeadlight = leftHeadlight.clone();
+            rightHeadlight.position.x = 1.5;
+            car.add(rightHeadlight);
+
+            // Wheels
+            const wheelGeometry = new THREE.CylinderGeometry(0.6, 0.6, 0.5, 32);
+            const wheelMaterial = new THREE.MeshPhongMaterial({ color: 0x333333, specular: 0x444444, shininess: 30 });
+            const wheelPositions = [
+                { x: -2, y: 0.6, z: 1.8 },
+                { x: 2, y: 0.6, z: 1.8 },
+                { x: -2, y: 0.6, z: -1.8 },
+                { x: 2, y: 0.6, z: -1.8 }
+            ];
+            
+            wheelPositions.forEach(position => {
+                const wheel = new THREE.Mesh(wheelGeometry, wheelMaterial);
+                wheel.rotation.z = Math.PI / 2;
+                wheel.position.set(position.x, position.y, position.z);
+                wheel.castShadow = true;
+                car.add(wheel);
+            });
+
+            // Rims
+            const rimGeometry = new THREE.TorusGeometry(0.4, 0.1, 16, 100);
+            const rimMaterial = new THREE.MeshPhongMaterial({ color: 0xcccccc, specular: 0xffffff, shininess: 100 });
+            wheelPositions.forEach(position => {
+                const rim = new THREE.Mesh(rimGeometry, rimMaterial);
+                rim.position.set(position.x, position.y, position.z);
+                if (position.x > 0) rim.rotation.y = Math.PI;
+                car.add(rim);
+            });
+
+            scene.add(car);
+
+            // Ground
+            const groundGeometry = new THREE.PlaneGeometry(200, 200);
+            const groundMaterial = new THREE.MeshPhongMaterial({ color: 0x1a1a1a });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -0.1;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const spotLight = new THREE.SpotLight(0xffffff, 1);
+            spotLight.position.set(0, 50, 50); 
+            spotLight.angle = Math.PI / 3; 
+            spotLight.penumbra = 0.5; 
+            spotLight.decay = 2;
+            spotLight.distance = 500; 
+            spotLight.castShadow = true;
+            spotLight.shadow.mapSize.width = 2048;
+            spotLight.shadow.mapSize.height = 2048;
+            scene.add(spotLight);
+
+            // Position the camera
+            camera.position.set(0, 5, 15);
+            camera.lookAt(car.position);
+
+            // Add event listeners for keyboard controls
+            document.addEventListener('keydown', onKeyDown);
+            document.addEventListener('keyup', onKeyUp);
+
+            // Add image loading capability
+            const textureLoader = new THREE.TextureLoader();
+            textureLoader.load('path/to/your/image.jpg', function(texture) {
+                createImage(texture, 0, 5, -15, 5, 5);
+            });
+        }
+
+        function createText(message, x, y, z, color = 0xffffff) {
+            const textGeometry = new THREE.TextGeometry(message, {
+                font: font,
+                size: 0.5,
+                height: 0.1,
+            });
+            const textMaterial = new THREE.MeshPhongMaterial({ color: color });
+            const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+            textMesh.position.set(x, y, z);
+            scene.add(textMesh);
+            return textMesh;
+        }
+
+        function createImage(texture, x, y, z, width, height) {
+            if (imageSprite) scene.remove(imageSprite);
+
+            const material = new THREE.SpriteMaterial({ map: texture });
+            imageSprite = new THREE.Sprite(material);
+            imageSprite.scale.set(width, height, 1);
+            imageSprite.position.set(x, y, z);
+          scene.add(imageSprite);
+        }
+
+        function onKeyDown(event) {
+            switch (event.key.toLowerCase()) {
+                case 'w': moveForward = true; break;
+                case 's': moveBackward = true; break;
+                case 'a': moveLeft = true; break;
+                case 'd': moveRight = true; break;
+                case 'q': turnLeft = true; break;
+                case 'e': turnRight = true; break;
+            }
+        }
+
+        function onKeyUp(event) {
+            switch (event.key.toLowerCase()) {
+                case 'w': moveForward = false; break;
+                case 's': moveBackward = false; break;
+                case 'a': moveLeft = false; break;
+                case 'd': moveRight = false; break;
+                case 'q': turnLeft = false; break;
+                case 'e': turnRight = false; break;
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Move the car based on key presses
+            if (moveForward) car.translateZ(-0.1);
+            if (moveBackward) car.translateZ(0.1);
+            if (moveLeft) car.translateX(-0.1);
+            if (moveRight) car.translateX(0.1);
+            if (turnLeft) car.rotation.y += 0.02;
+            if (turnRight) car.rotation.y -= 0.02;
+
+            // Rotate wheels
+            car.children.forEach(child => {
+                if (child.geometry && child.geometry.type === 'CylinderGeometry') {
+                    child.rotation.x += (moveForward || moveBackward) ? 0.1 : 0;
+                }
+            });
+
+            // Keep the camera focused on the car
+            camera.position.x = car.position.x;
+            camera.position.z = car.position.z + 15;
+            camera.lookAt(car.position);
+
+            // Update coordinates display
+            const coords = document.getElementById('coordinates');
+            coords.textContent = `Coordinates: (x: ${car.position.x.toFixed(2)}, y: ${car.position.y.toFixed(2)}, z: ${car.position.z.toFixed(2)})`;
+
+            // Toggle visibility of texts based on car position
+            if (car.position.x > 0) {
+                if (!infoVisible) {
+                    infoTextMesh.visible = true;
+                    daresTextMesh.visible = false;
+                    infoVisible = true;
+                    daresVisible = false;
+                }
+            } else {
+                if (!daresVisible) {
+                    infoTextMesh.visible = false;
+                    daresTextMesh.visible = true;
+                    infoVisible = false;
+                    daresVisible = true;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        init();
+        animate();
+    </script>
+</body>
+</html>
